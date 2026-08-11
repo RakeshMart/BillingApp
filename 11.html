@@ -4859,18 +4859,49 @@
 
       /* ---- Image Store (Drive folders used for customer/product photos) ---- */
       async function imageStore() {
+        // Click hote hi turant ek loading sheet dikhao — isse user ko pata
+        // chalta hai ki tap register ho gaya (pehle koi feedback nahi tha,
+        // isliye slow/failed network par lag raha tha "click nahi ho raha").
+        UI.sheet(`<div class="sheet-head"><h3>Image Store</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
+      <div class="sheet-body"><div class="empty"><div class="sk" style="height:60px;border-radius:14px;"></div></div></div>`);
+
         if (!Sync.getUrl()) {
           UI.sheet(`<div class="sheet-head"><h3>Image Store</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
         <div class="sheet-body"><div class="hint">Pehle Google Sheet connect karo (More → Google Sheet Sync).</div></div>`);
           return;
         }
-        let list = await Sync.getImageStoreList();
+
+        function withTimeout(promise, ms) {
+          return Promise.race([
+            promise,
+            new Promise((resolve) => setTimeout(() => resolve(null), ms))
+          ]);
+        }
+
+        let list;
+        try {
+          list = await withTimeout(Sync.getImageStoreList(), 10000);
+        } catch (e) {
+          list = null;
+        }
+
+        if (list === null) {
+          UI.sheet(`<div class="sheet-head"><h3>Image Store</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
+        <div class="sheet-body">
+          <div class="hint" style="margin-bottom:12px;color:var(--danger)">Sheet se data load nahi ho paaya. Internet check karke dobara try karo.</div>
+          <button class="btn primary block" onclick="More.imageStore()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0"><path d="M17.65 6.35A7.958 7.958 0 0012 4a8 8 0 108 8"/><path d="M17 4v4h-4"/></svg> Retry</button>
+        </div>`);
+          return;
+        }
+
         // Sirf ek hi folder hai aur wo active nahi hai — usko khud active kar do,
         // kyunki jab sirf ek option hi hai to usse "off" rehne ka koi matlab nahi,
         // aur na hi uske liye ek switch dikhane ki zaroorat hai.
         if (list.length === 1 && !list[0].active) {
-          await Sync.setActiveImageStore(list[0].folderLink);
-          list = await Sync.getImageStoreList();
+          try {
+            await withTimeout(Sync.setActiveImageStore(list[0].folderLink), 10000);
+            list[0].active = true; // local update — dobara network call ki zaroorat nahi
+          } catch (e) { /* ignore — list already shows the folder either way */ }
         }
         const multi = list.length > 1;
         UI.sheet(`<div class="sheet-head"><h3>Image Store</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
