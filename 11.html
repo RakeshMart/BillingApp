@@ -4941,11 +4941,33 @@
         const name = document.getElementById("isName").value.trim();
         const link = document.getElementById("isLink").value.trim();
         if (!name || !link) { U.toast("Folder Name aur Link daalein"); return; }
+        const btn = document.querySelector('.sheet-body .btn.primary.block');
+        if (btn) { btn.disabled = true; btn.textContent = "Saving..."; }
         const origLink = document.getElementById("isOrigLink").value;
         const row = { email: document.getElementById("isEmail").value.trim(), folderName: name, folderLink: link };
-        const r = await Sync.saveImageStoreEntry(row, origLink);
-        if (r.ok && r.data && r.data.success) { U.toast("Saved"); imageStore(); }
-        else { U.toast("Save fail hua"); }
+        let r;
+        try {
+          r = await Sync.saveImageStoreEntry(row, origLink);
+        } catch (e) {
+          console.error("saveImageStoreEntry threw:", e);
+          U.toast("Network error: " + (e.message || e));
+          if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:15px;height:15px;flex-shrink:0"><path d="M20 6L9 17l-5-5"/></svg> Save'; }
+          return;
+        }
+        console.log("saveImageStoreEntry response:", r);
+        if (r.ok && r.data && r.data.success) {
+          U.toast("Saved");
+          imageStore();
+        } else if (r.ok && r.data && r.data.error) {
+          U.toast("Sheet error: " + r.data.error);
+          if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:15px;height:15px;flex-shrink:0"><path d="M20 6L9 17l-5-5"/></svg> Save'; }
+        } else if (r.ok && !r.data) {
+          U.toast("Backend se response nahi mila — Apps Script ko dobara Deploy karo (New Version)");
+          if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:15px;height:15px;flex-shrink:0"><path d="M20 6L9 17l-5-5"/></svg> Save'; }
+        } else {
+          U.toast("Save fail hua — internet ya Sheet URL check karo");
+          if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:15px;height:15px;flex-shrink:0"><path d="M20 6L9 17l-5-5"/></svg> Save'; }
+        }
       }
       async function deleteImageStoreEntry(folderLink) {
         if (!confirm("Ye folder entry hatani hai?")) return;
