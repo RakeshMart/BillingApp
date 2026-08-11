@@ -4864,10 +4864,18 @@
         <div class="sheet-body"><div class="hint">Pehle Google Sheet connect karo (More → Google Sheet Sync).</div></div>`);
           return;
         }
-        const list = await Sync.getImageStoreList();
+        let list = await Sync.getImageStoreList();
+        // Sirf ek hi folder hai aur wo active nahi hai — usko khud active kar do,
+        // kyunki jab sirf ek option hi hai to usse "off" rehne ka koi matlab nahi,
+        // aur na hi uske liye ek switch dikhane ki zaroorat hai.
+        if (list.length === 1 && !list[0].active) {
+          await Sync.setActiveImageStore(list[0].folderLink);
+          list = await Sync.getImageStoreList();
+        }
+        const multi = list.length > 1;
         UI.sheet(`<div class="sheet-head"><h3>Image Store</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
       <div class="sheet-body">
-        <div class="hint" style="margin-bottom:14px">Jo folder <b style="color:var(--success)">green (Active)</b> hai, customer/product photo upload usi Google Drive folder me hoga. Switch on karke kisi bhi folder ko Active karo.</div>
+        <div class="hint" style="margin-bottom:14px">Jo folder <b style="color:var(--success)">green (Active)</b> hai, customer/product photo upload usi Google Drive folder me hoga. ${multi ? "Switch on karke kisi bhi folder ko Active karo." : "Ek hi folder hai isliye ye hamesha active rahega."}</div>
         <button class="btn primary block" style="margin-bottom:14px" onclick="More.imageStoreForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:15px;height:15px;flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg> Add New Folder</button>
         ${list.length === 0 ? '<div class="empty">Koi folder add nahi kiya gaya</div>' : list.map(r => `
           <div class="card" style="margin-bottom:10px;border:1.5px solid ${r.active ? 'var(--success)' : 'var(--danger)'};background:${r.active ? 'var(--success-bg)' : 'var(--danger-bg)'};">
@@ -4878,7 +4886,7 @@
                 <div class="hint" style="word-break:break-all;margin-top:2px;">${U.escapeHtml(r.folderLink)}</div>
                 <div class="pill ${r.active ? 'green' : 'red'}" style="margin-top:6px;">${r.active ? 'ACTIVE' : 'INACTIVE'}</div>
               </div>
-              <button class="switch ${r.active ? 'on' : ''}" style="flex-shrink:0;" onclick="More.setActiveImageStore('${U.escapeHtml(r.folderLink)}')" title="${r.active ? 'Active' : 'Make this active'}"></button>
+              ${multi ? `<button type="button" class="switch ${r.active ? 'on' : ''}" style="flex-shrink:0;position:relative;z-index:2;" onclick="event.stopPropagation();More.setActiveImageStore('${U.escapeHtml(r.folderLink)}')" title="${r.active ? 'Active' : 'Make this active'}"></button>` : ''}
             </div>
             <div class="row" style="margin-top:10px;">
               <button class="btn ghost" onclick='More.imageStoreForm(${JSON.stringify(r).replace(/'/g, "&#39;")})'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/></svg> Edit</button>
