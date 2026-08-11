@@ -5255,9 +5255,18 @@
        aur file ka naam customer name/id se banata hai (mismatch se bachne
        ke liye). Add Customer aur Edit Customer, dono forms isi ko use
        karte hain.
+
+       FIX: pehle "Choose Folder" popup shared UI.sheet() (#overlay/#sheet)
+       use karta tha — jo Add/Edit Customer form ke saath EK HI element
+       share karta hai. Folder-picker khulte hi wo poora Add Customer form
+       overwrite kar deta tha, isliye upload ke baad form gayab ho jaata
+       tha aur photo kabhi save/Drive tak nahi pahunchti thi. Ab yeh apna
+       khud ka independent overlay (document.body me alag se) banata hai,
+       jo peeche khule form ko bilkul touch nahi karta.
     --------------------------------------------------------------- */
     const PhotoUpload = (() => {
       let _base64 = null, _mime = "image/jpeg", _nameHint = "customer", _chosenFolder = null, _onDone = null, _previewElId = null;
+      let _ov = null;
 
       async function choose(base64, mimeType, nameHint, previewElId, onDone) {
         _base64 = base64; _mime = mimeType || "image/jpeg"; _nameHint = nameHint || "customer";
@@ -5276,8 +5285,16 @@
         renderPicker(active, subs);
       }
 
+      function closePicker() {
+        if (_ov) { _ov.remove(); _ov = null; }
+      }
+
       function renderPicker(active, subs) {
-        UI.sheet(`<div class="sheet-head"><h3>Choose Folder</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
+        closePicker();
+        _ov = document.createElement("div");
+        _ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(6,32,21,.85);display:flex;align-items:flex-end;justify-content:center;";
+        _ov.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;max-width:520px;width:100%;max-height:85%;overflow-y:auto;">
+      <div class="sheet-head"><h3>Choose Folder</h3><button class="icon-btn dark" onclick="PhotoUpload.cancel()">✕</button></div>
       <div class="sheet-body">
         <div class="hint" style="margin-bottom:10px">Photo "${U.escapeHtml(active.folderName)}" me save hogi. Chaho to koi subfolder chuno ya naya banao.</div>
         <div class="list-row" style="cursor:pointer;padding:10px 0;" onclick="PhotoUpload.pick('${U.escapeHtml(active.folderLink)}','${U.escapeHtml('Root — ' + active.folderName)}')">
@@ -5293,14 +5310,28 @@
         <div class="field"><label class="label">Or create new subfolder</label>
           <div class="row"><input class="input" id="pickNewFolderName" placeholder="e.g. Regular Customers"><button class="icon-btn dark" style="width:44px" onclick="PhotoUpload.createAndPick('${U.escapeHtml(active.folderLink)}')">+</button></div>
         </div>
-        <button class="btn primary block" style="margin-top:14px" id="pickConfirmBtn" onclick="PhotoUpload.confirm()">Upload Here</button>
-      </div>`);
+        <div class="hint" id="pickSelectedHint" style="margin:8px 0;color:var(--success);">Selected: Root — ${U.escapeHtml(active.folderName)}</div>
+        <button class="btn primary block" style="margin-top:6px" id="pickConfirmBtn" onclick="PhotoUpload.confirm()">Upload Here</button>
+      </div>
+    </div>`;
+        document.body.appendChild(_ov);
       }
 
-      function pick(link, name) { _chosenFolder = { link, name }; U.toast(name + " selected"); }
+      function cancel() {
+        closePicker();
+        if (_onDone) _onDone(null);
+      }
+
+      function pick(link, name) {
+        _chosenFolder = { link, name };
+        const hint = document.getElementById("pickSelectedHint");
+        if (hint) hint.textContent = "Selected: " + name;
+        U.toast(name + " selected");
+      }
 
       async function createAndPick(activeLink) {
-        const name = document.getElementById("pickNewFolderName").value.trim();
+        const inp = document.getElementById("pickNewFolderName");
+        const name = inp ? inp.value.trim() : "";
         if (!name) { U.toast("Subfolder ka naam daalein"); return; }
         U.toast("Creating folder...");
         const r = await Sync.createSubfolder(activeLink, name);
@@ -5314,7 +5345,7 @@
         const safeName = String(_nameHint).replace(/[^a-zA-Z0-9]+/g, "_").slice(0, 40);
         const fileName = `customer_${safeName}_${Date.now()}.jpg`;
         const url = await Sync.uploadImage(_base64, fileName, _mime, null, null, null, null, _chosenFolder ? _chosenFolder.link : null);
-        UI.close();
+        closePicker();
         if (url) {
           U.toast("Photo uploaded");
           if (_previewElId) {
@@ -5328,7 +5359,7 @@
         }
       }
 
-      return { choose, pick, createAndPick, confirm };
+      return { choose, cancel, pick, createAndPick, confirm };
     })();
 
     /* ---------- 3. Pull everything from the Sheet into local IndexedDB + Settings ---------- */
