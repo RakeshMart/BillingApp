@@ -2406,7 +2406,7 @@
         U.toast(v ? "Sheet connected" : "Sheet URL removed — local-only mode");
       }
 
-      return { getUrl, setUrl, push, login, deleteBatch, openConfig, saveConfig };
+      return { getUrl, setUrl, push, login, deleteBatch, openConfig, saveConfig, call };
     })();
 
     /* ---------------------------------------------------------------
@@ -4897,11 +4897,15 @@
         // Sirf ek hi folder hai aur wo active nahi hai — usko khud active kar do,
         // kyunki jab sirf ek option hi hai to usse "off" rehne ka koi matlab nahi,
         // aur na hi uske liye ek switch dikhane ki zaroorat hai.
-        if (list.length === 1 && !list[0].active) {
-          try {
-            await withTimeout(Sync.setActiveImageStore(list[0].folderLink), 10000);
-            list[0].active = true; // local update — dobara network call ki zaroorat nahi
-          } catch (e) { /* ignore — list already shows the folder either way */ }
+        if (list.length === 1) {
+          // Ek hi folder ho to wo hamesha Active dikhna chahiye — chahe
+          // Sheet me abhi TRUE mark na ho. UI turant "ACTIVE" dikhaye,
+          // aur background me Sheet ko bhi sync kar de agar zaroorat ho.
+          if (!list[0].active) {
+            list[0].active = true; // turant local UI update
+            try { await withTimeout(Sync.setActiveImageStore(list[0].folderLink), 10000); }
+            catch (e) { /* ignore — UI already shows it correctly */ }
+          }
         }
         const multi = list.length > 1;
         UI.sheet(`<div class="sheet-head"><h3>Image Store</h3><button class="icon-btn dark" onclick="UI.close()">✕</button></div>
