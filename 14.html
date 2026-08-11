@@ -5339,6 +5339,12 @@
       let _base64 = null, _mime = "image/jpeg", _nameHint = "customer", _chosenFolder = null, _onDone = null, _previewElId = null;
       let _ov = null;
       let _targetId = null, _targetSheet = null, _targetColumn = null, _targetKey = null;
+      // Tracks the in-flight upload/pick so save functions can await it —
+      // fixes the bug where tapping Save immediately after choosing a
+      // photo pushed an empty Photo value because the upload hadn't
+      // finished yet, and nothing ever went back to fill it in later.
+      let _pendingPromise = null, _resolvePending = null;
+      function pending() { return _pendingPromise; }
 
       async function choose(base64, mimeType, nameHint, previewElId, onDone, targetId, targetSheet, targetColumn, targetKey) {
         _base64 = base64; _mime = mimeType || "image/jpeg"; _nameHint = nameHint || "customer";
@@ -5346,12 +5352,15 @@
         _targetId = targetId || null; _targetSheet = targetSheet || null;
         _targetColumn = targetColumn || null; _targetKey = targetKey || null;
 
-        if (!Sync.getUrl()) { if (_onDone) _onDone(_base64); return; }
+        _pendingPromise = new Promise((res) => { _resolvePending = res; });
+
+        if (!Sync.getUrl()) { if (_onDone) _onDone(_base64); _resolvePending(); return; }
         const stores = await Sync.getImageStoreList();
         const active = stores.find(s => s.active);
         if (!active) {
           U.toast("Pehle More → Image Store me ek folder Active karo");
           if (_onDone) _onDone(_base64);
+          _resolvePending();
           return;
         }
         _chosenFolder = { name: "Root — " + active.folderName, link: active.folderLink };
@@ -5394,6 +5403,7 @@
       function cancel() {
         closePicker();
         if (_onDone) _onDone(null);
+        if (_resolvePending) { _resolvePending(); _resolvePending = null; }
       }
 
       function pick(link, name) {
@@ -5442,9 +5452,10 @@
           U.toast("Upload fail hua, local photo use hogi");
           if (_onDone) _onDone(_base64);
         }
+        if (_resolvePending) { _resolvePending(); _resolvePending = null; }
       }
 
-      return { choose, cancel, pick, createAndPick, confirm };
+      return { choose, cancel, pick, createAndPick, confirm, pending };
     })();
 
     /* ---------- 3. Pull everything from the Sheet into local IndexedDB + Settings ---------- */
@@ -5628,6 +5639,7 @@ More.handleCustPhotoUpload = async function (ev) {
     Counter.saveAddCustomer = async function () {
   const name = document.getElementById("cName").value.trim();
   if (!name) { U.toast("Naam daliye"); return; }
+  if (PhotoUpload.pending()) { U.toast("Photo upload ho raha hai, ruko..."); await PhotoUpload.pending(); }
   const photoUrl = window._pendingCustPhoto || "";
   const nextId = window._addCustomerReservedId || await Sync.getNextId("Customers", "Customer ID");
   const obj = { name, mobile: document.getElementById("cMobile").value.trim(), gender: document.getElementById("cGender").value, dob: document.getElementById("cDob").value, address: document.getElementById("cAddr").value.trim(), photo: photoUrl };
@@ -5652,6 +5664,7 @@ More.handleCustPhotoUpload = async function (ev) {
     More.saveCustomer = async function () {
   const name = document.getElementById("mcName").value.trim();
   if (!name) return;
+  if (PhotoUpload.pending()) { U.toast("Photo upload ho raha hai, ruko..."); await PhotoUpload.pending(); }
   const idVal = document.getElementById("mcId").value;
   const photoUrl = window._pendingMcPhoto || "";
   const obj = { name, mobile: document.getElementById("mcMobile").value.trim(), gender: document.getElementById("mcGender").value, dob: document.getElementById("mcDob").value, address: document.getElementById("mcAddr").value.trim(), photo: photoUrl };
